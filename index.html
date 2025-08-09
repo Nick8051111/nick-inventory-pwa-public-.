@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>eBay Inventory – Local-first PWA</title>
+
+  <!-- PWA basics -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0a1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+
+  <style>
+    :root{--bg:#0a1220;--card:#0f1b2d;--muted:#577089;--text:#e6eef6;--accent:#0076B6;--danger:#ef4444;--warn:#f59e0b;--silver:#B0B7BC}
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b1027,#0f172a 30%,#0b1027);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text)}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:18px 20px;position:sticky;top:0;background:#0b1027d0;backdrop-filter:blur(6px);border-bottom:1px solid #1f2937}
+    h1{font-size:20px;margin:0;font-weight:800;letter-spacing:.2px}
+    .container{max-width:1200px;margin:18px auto;padding:0 16px}
+    .grid{display:grid;grid-template-columns:1.2fr 2fr;gap:16px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;box-shadow:0 6px 30px rgba(0,0,0,.25)}
+    .card h2{margin:0 0 8px 0;font-size:16px}
+    .pad{padding:16px}
+    label{font-size:12px;color:#94a3b8}
+    input,select,textarea{width:100%;padding:10px 12px;margin-top:6px;margin-bottom:10px;background:#0b1326;border:1f solid #1f2937;border:1px solid #1f2937;border-radius:10px;color:var(--text)}
+    textarea{min-height:70px;resize:vertical}
+    .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+    .col-6{grid-column:span 6}.col-4{grid-column:span 4}.col-3{grid-column:span 3}.col-2{grid-column:span 2}.col-12{grid-column:span 12}
+    .btn{border:1px solid #1f2937;background:#0b1326;color:var(--text);padding:10px 12px;border-radius:10px;cursor:pointer}
+    .btn:hover{filter:brightness(1.15)}
+    .primary{background:linear-gradient(180deg,#16a34a,#22c55e);border:none;color:#04160a;font-weight:700}
+    .danger{background:linear-gradient(180deg,#dc2626,#ef4444);border:none;color:#2b0c0c;font-weight:700}
+    .ghost{background:#0b1326}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .toolbar input{max-width:220px}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    thead th{font-size:12px;color:#94a3b8;text-align:left;padding:8px 10px}
+    tbody tr{background:#0b1326;border:1px solid #1f2937}
+    tbody td{padding:10px;border-top:1px solid #1f2937;border-bottom:1px solid #1f2937}
+    tbody tr td:first-child{border-left:1px solid #1f2937;border-top-left-radius:12px;border-bottom-left-radius:12px}
+    tbody tr td:last-child{border-right:1px solid #1f2937;border-top-right-radius:12px;border-bottom-right-radius:12px}
+    .pill{padding:4px 8px;border-radius:999px;font-size:12px}
+    .active{background:#1d4ed8}.sold{background:#16a34a;color:#06230e}.pending{background:#f59e0b;color:#2b1a07}
+    .right{text-align:right}
+    .muted{color:#94a3b8}
+    .inline{display:inline-flex;gap:6px;align-items:center}
+    .footer{padding:20px 0;color:#94a3b8;font-size:12px;text-align:center}
+    @media (max-width:960px){.grid{grid-template-columns:1fr}.row{grid-template-columns:repeat(6,1fr)}.col-6{grid-column:span 6}.col-4{grid-column:span 3}.col-3{grid-column:span 3}.col-2{grid-column:span 2}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>eBay Inventory – Local CRUD</h1>
+    <div class="toolbar">
+      <input id="search" placeholder="Search title or SKU..."/>
+      <select id="statusFilter">
+        <option value="">All Status</option>
+        <option value="Active">Active</option>
+        <option value="Sold">Sold</option>
+        <option value="Pending">Pending</option>
+      </select>
+      <button class="btn ghost" id="importCsvBtn">Import CSV</button>
+      <button class="btn" id="exportCsvBtn">Export CSV</button>
+      <button class="btn" id="syncPullBtn" title="Pull from cloud">Sync Pull</button>
+      <button class="btn" id="syncPushBtn" title="Push local to cloud">Sync Push</button>
+      <button class="btn" id="genIconsBtn" title="Generate app icons">Gen Icons</button>
+      <button class="btn primary" id="installBtn" title="Install this app" style="display:none">Install App</button>
+      <button class="btn danger" id="wipeBtn" title="Delete ALL data">Wipe</button>
+    </div>
+  </header>
+
+  <div class="container grid">
+    <!-- LEFT: FORM -->
+    <div class="card pad">
+      <h2>Add / Edit Item</h2>
+      <form id="itemForm">
+        <input type="hidden" id="itemId"/>
+        <div class="row">
+          <div class="col-6">
+            <label>Title</label>
+            <input id="title" required placeholder="Buck 110 Folding Hunter"/>
+          </div>
+          <div class="col-3">
+            <label>Category</label>
+            <input id="category" placeholder="Knives / Toys / Hot Wheels"/>
+          </div>
+          <div class="col-3">
+            <label>SKU</label>
+            <input id="sku" placeholder="NICK-00123"/>
+          </div>
+          <div class="col-3">
+            <label>UPC / Barcode</label>
+            <div class="inline" style="gap:8px;width:100%">
+              <input id="upc" placeholder="e.g., 071641098765" style="flex:1"/>
+              <button class="btn" type="button" id="scanBtn">Scan</button>
+            </div>
+          </div>
+          <div class="col-3">
+            <label>Location Bin</label>
+            <input id="locationBin" placeholder="e.g., BIN-A3"/>
+          </div>
+          <div class="col-3">
+            <label>Source</label>
+            <input id="source" placeholder="e.g., GovDeals lot #42"/>
+          </div>
+          <div class="col-12">
+            <label>eBay URL (optional)</label>
+            <input id="ebayUrl" placeholder="https://www.ebay.com/itm/..."/>
+          </div>
+
+          <div class="col-3">
+            <label>Cost ($)</label>
+            <input id="cost" type="number" step="0.01" value="0"/>
+          </div>
+          <div class="col-3">
+            <label>List Price ($)</label>
+            <input id="listPrice" type="number" step="0.01" value="0"/>
+          </div>
+          <div class="col-3">
+            <label>Sale Price ($)</label>
+            <input id="salePrice" type="number" step="0.01" value="0"/>
+          </div>
+          <div class="col-3">
+            <label>Buyer Paid Shipping ($)</label>
+            <input id="shipCharged" type="number" step="0.01" value="0"/>
+          </div>
+          <div class="col-3">
+            <label>Your Shipping Cost ($)</label>
+            <input id="shipCost" type="number" step="0.01" value="0"/>
+          </div>
+          <div class="col-3">
+            <label>Fees %</label>
+            <input id="feePercent" type="number" step="0.01" value="13.25"/>
+          </div>
+          <div class="col-3">
+            <label>Fixed Fee ($)</label>
+            <input id="feeFixed" type="number" step="0.01" value="0.30"/>
+          </div>
+          <div class="col-3">
+            <label>Status</label>
+            <select id="status">
+              <option>Active</option>
+              <option>Sold</option>
+              <option>Pending</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label>Weight (oz)</label>
+            <input id="weightOz" type="number" step="0.1" value="0"/>
+          </div>
+          <div class="col-3">
+            <label>Date Acquired</label>
+            <input id="dateIn" type="date"/>
+          </div>
+          <div class="col-3">
+            <label>Date Sold</label>
+            <input id="dateOut" type="date"/>
+          </div>
+          <div class="col-12">
+            <label>Notes</label>
+            <textarea id="notes" placeholder="Condition, missing parts, lot source, etc."></textarea>
+          </div>
+          <div class="col-12 inline" style="justify-content:space-between;margin-top:8px">
+            <div class="inline">
+              <span class="muted">Potential Profit: </span>
+              <strong id="potentialProfit">$0.00</strong>
+              <span class="muted"> | Actual Profit: </span>
+              <strong id="actualProfit">$0.00</strong>
+            </div>
+            <div class="inline" style="gap:8px">
+              <button class="btn" type="button" id="resetBtn">Reset</button>
+              <button class="btn primary" type="submit" id="saveBtn">Save</button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- RIGHT: TABLE / LIST -->
+    <div class="card pad">
+      <div class="inline" style="justify-content:space-between;width:100%;margin-bottom:6px">
+        <h2>Items</h2>
+        <div class="inline muted" style="gap:16px">
+          <div>Total Items: <strong id="countTotal">0</strong></div>
+          <div>Active: <strong id="countActive">0</strong></div>
+          <div>Sold: <strong id="countSold">0</strong></div>
+          <div>Pending: <strong id="countPending">0</strong></div>
+        </div>
+      </div>
+      <div class="inline muted" style="gap:16px;margin-bottom:10px">
+        <div>Month Profit: <strong id="monthProfit">$0.00</strong></div>
+        <div>All-Time Profit: <strong id="allProfit">$0.00</strong></div>
+      </div>
+      <div style="overflow:auto">
+        <table id="itemsTable">
+          <thead>
+            <tr>
+              <th data-sort="title">Title</th>
+              <th data-sort="sku">SKU</th>
+              <th data-sort="category">Category</th>
+              <th class="right" data-sort="listPrice">List $</th>
+              <th class="right" data-sort="salePrice">Sale $</th>
+              <th class="right" data-sort="profit">Profit $</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="container footer">Local-first. Works offline. Optional cloud sync via Supabase (fill keys in code). Export CSV for backup. Colors: Detroit Lions blue & silver. 🦁</div>
+
+  <input type="file" id="csvInput" accept=".csv" style="display:none"/>
+
+  <!-- Barcode Scan Overlay -->
+  <div id="scanOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column;color:white">
+    <video id="scanVideo" autoplay playsinline style="max-width:90vw;max-height:60vh;border:2px solid var(--accent);border-radius:12px"></video>
+    <div class="inline" style="margin-top:12px;gap:8px">
+      <button class="btn" id="scanCloseBtn">Close</button>
+    </div>
+    <div id="scanMsg" style="margin-top:8px;color:#cbd5e1;font-size:12px">Point camera at a barcode…</div>
+  </div>
+
+  <script>
+    // ===== Local config & helpers =====
+    const LS_KEY = 'nick_ebay_inventory_v1';
+
+    // ===== Cloud Sync (Supabase) Config =====
+    const SUPABASE_URL = '';   // e.g., https://xxxxx.supabase.co
+    const SUPABASE_KEY = '';   // service role or anon key (service role recommended for upsert)
+    const SUPABASE_TABLE = 'inventory';
+    function supaEnabled(){ return SUPABASE_URL && SUPABASE_KEY; }
+
+    // Utils
+    const $ = (id)=>document.getElementById(id);
+    const money = (n)=>`$${(Number(n||0)).toFixed(2)}`;
+    const todayStr = ()=> new Date().toISOString().slice(0,10);
+
+    function calcFees(salePrice, feePercent, feeFixed){
+      salePrice = Number(salePrice||0); feePercent = Number(feePercent||0); feeFixed = Number(feeFixed||0);
+      return salePrice * (feePercent/100) + feeFixed;
+    }
+    function calcProfit({salePrice, cost, shipCost, feePercent, feeFixed}){
+      const fees = calcFees(salePrice, feePercent, feeFixed);
+      return Number(salePrice||0) - Number(cost||0) - Number(shipCost||0) - fees;
+    }
+    function calcPotential({listPrice, cost, shipCost, feePercent, feeFixed}){
+      const fees = calcFees(listPrice, feePercent, feeFixed);
+      return Number(listPrice||0) - Number(cost||0) - Number(shipCost||0) - fees;
+    }
+
+    // State
+    let items = load();
+    let sortField = 'dateIn';
+    let sortDir = 'desc';
+
+    function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); }catch(e){ return [] } }
+    function save(){ localStorage.setItem(LS_KEY, JSON.stringify(items)); }
+
+    // Form elements
+    const formEls = {
+      id: $('itemId'),
+      title: $('title'),
+      category: $('category'),
+      sku: $('sku'),
+      upc: $('upc'),
+      locationBin: $('locationBin'),
+      source: $('source'),
+      ebayUrl: $('ebayUrl'),
+      cost: $('cost'),
+      listPrice: $('listPrice'),
+      salePrice: $('salePrice'),
+      shipCharged: $('shipCharged'),
+      shipCost: $('shipCost'),
+      feePercent: $('feePercent'),
+      feeFixed: $('feeFixed'),
+      status: $('status'),
+      weightOz: $('weightOz'),
+      dateIn: $('dateIn'),
+      dateOut: $('dateOut'),
+      notes: $('notes')
+    };
+
+    function formToItem(){
+      return {
+        id: formEls.id.value || crypto.randomUUID(),
+        title: formEls.title.value.trim(),
+        category: formEls.category.value.trim(),
+        sku: formEls.sku.value.trim(),
+        upc: (formEls.upc?.value||'').trim(),
+        locationBin: (formEls.locationBin?.value||'').trim(),
+        source: (formEls.source?.value||'').trim(),
+        ebayUrl: (formEls.ebayUrl?.value||'').trim(),
+        cost: Number(formEls.cost.value||0),
+        listPrice: Number(formEls.listPrice.value||0),
+        salePrice: Number(formEls.salePrice.value||0),
+        shipCharged: Number(formEls.shipCharged.value||0),
+        shipCost: Number(formEls.shipCost.value||0),
+        feePercent: Number(formEls.feePercent.value||0),
+        feeFixed: Number(formEls.feeFixed.value||0),
+        status: formEls.status.value,
+        weightOz: Number(formEls.weightOz.value||0),
+        dateIn: formEls.dateIn.value || todayStr(),
+        dateOut: formEls.dateOut.value || '',
+        notes: formEls.notes.value.trim()
+      }
+    }
+
+    function itemToForm(it){
+      formEls.id.value = it.id;
+      formEls.title.value = it.title||'';
+      formEls.category.value = it.category||'';
+      formEls.sku.value = it.sku||'';
+      if(formEls.upc) formEls.upc.value = it.upc||'';
+      if(formEls.locationBin) formEls.locationBin.value = it.locationBin||'';
+      if(formEls.source) formEls.source.value = it.source||'';
+      if(formEls.ebayUrl) formEls.ebayUrl.value = it.ebayUrl||'';
+      formEls.cost.value = it.cost||0;
+      formEls.listPrice.value = it.listPrice||0;
+      formEls.salePrice.value = it.salePrice||0;
+      formEls.shipCharged.value = it.shipCharged||0;
+      formEls.shipCost.value = it.shipCost||0;
+      formEls.feePercent.value = it.feePercent||13.25;
+      formEls.feeFixed.value = it.feeFixed||0.30;
+      formEls.status.value = it.status||'Active';
+      formEls.weightOz.value = it.weightOz||0;
+      formEls.dateIn.value = it.dateIn || '';
+      formEls.dateOut.value = it.dateOut || '';
+      formEls.notes.value = it.notes||'';
+      computeLiveProfit();
+      formEls.title.focus();
+    }
+
+    function resetForm(){
+      itemToForm({id:'', title:'', category:'', sku:'', upc:'', locationBin:'', source:'', ebayUrl:'', cost:0, listPrice:0, salePrice:0, shipCharged:0, shipCost:0, feePercent:13.25, feeFixed:0.30, status:'Active', weightOz:0, dateIn:todayStr(), dateOut:'', notes:''});
+    }
+
+    function computeLiveProfit(){
+      const data = formToItem();
+      const potential = calcPotential(data);
+      const actual = calcProfit(data);
+      document.getElementById('potentialProfit').textContent = money(potential);
+      document.getElementById('actualProfit').textContent = money(actual);
+    }
+
+    ['cost','listPrice','salePrice','shipCharged','shipCost','feePercent','feeFixed'].forEach(id=>{
+      const el = $(id); if(el) el.addEventListener('input', computeLiveProfit);
+    });
+
+    document.getElementById('itemForm').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const newItem = formToItem();
+      if(!newItem.title){ alert('Title required'); return; }
+      const idx = items.findIndex(x=>x.id===newItem.id);
+      if(idx>=0){ items[idx] = newItem; } else { items.unshift(newItem); }
+      save();
+      render();
+      resetForm();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', resetForm);
+
+    // Table rendering
+    function render(){
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      const status = document.getElementById('statusFilter').value;
+      let list = items.filter(it=>{
+        const matchQ = !q || (it.title||'').toLowerCase().includes(q) || (it.sku||'').toLowerCase().includes(q);
+        const matchS = !status || it.status===status;
+        return matchQ && matchS;
+      });
+
+      list.sort((a,b)=>{
+        const dir = sortDir==='asc'?1:-1;
+        const va = getSortVal(a, sortField);
+        const vb = getSortVal(b, sortField);
+        if(va<vb) return -1*dir; if(va>vb) return 1*dir; return 0;
+      });
+
+      const tbody = document.querySelector('#itemsTable tbody');
+      tbody.innerHTML = '';
+
+      let allProfit = 0; let monthProfit = 0; const now = new Date();
+
+      list.forEach(it=>{
+        const profit = calcProfit(it);
+        if(it.status==='Sold'){
+          allProfit += profit;
+          if(it.dateOut){
+            const d = new Date(it.dateOut);
+            if(d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) monthProfit += profit;
+          }
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(it.title||'')}</td>
+          <td class="muted">${escapeHtml(it.sku||'')}</td>
+          <td class="muted">${escapeHtml(it.category||'')}</td>
+          <td class="right">${money(it.listPrice)}</td>
+          <td class="right">${money(it.salePrice)}</td>
+          <td class="right">${money(profit)}</td>
+          <td>${statusPill(it.status)}</td>
+          <td class="muted">${escapeHtml(it.dateIn||'')}</td>
+          <td>
+            <button class="btn" data-act="edit" data-id="${it.id}">Edit</button>
+            <button class="btn danger" data-act="del" data-id="${it.id}">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Counters
+      document.getElementById('countTotal').textContent = items.length;
+      document.getElementById('countActive').textContent = items.filter(x=>x.status==='Active').length;
+      document.getElementById('countSold').textContent = items.filter(x=>x.status==='Sold').length;
+      document.getElementById('countPending').textContent = items.filter(x=>x.status==='Pending').length;
+      document.getElementById('allProfit').textContent = money(allProfit);
+      document.getElementById('monthProfit').textContent = money(monthProfit);
+
+      // Row actions
+      tbody.querySelectorAll('button').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+          const id = e.currentTarget.getAttribute('data-id');
+          const act = e.currentTarget.getAttribute('data-act');
+          const it = items.find(x=>x.id===id);
+          if(!it) return;
+          if(act==='edit'){ itemToForm(it); window.scrollTo({top:0,behavior:'smooth'}); }
+          if(act==='del'){
+            if(confirm('Delete this item?')){
+              items = items.filter(x=>x.id!==id); save(); render();
+            }
+          }
+        });
+      });
+    }
+
+    function statusPill(s){
+      const cls = s==='Sold'?'sold':(s==='Pending'?'pending':'active');
+      return `<span class="pill ${cls}">${s}</span>`;
+    }
+
+    function getSortVal(it, field){
+      const v = it[field];
+      if(field==='profit') return calcProfit(it);
+      if(field==='listPrice' || field==='salePrice') return Number(v||0);
+      if(field==='dateIn' || field==='dateOut'){ return (v? new Date(v).getTime():0); }
+      return (v||'').toString().toLowerCase();
+    }
+
+    function escapeHtml(s){
+      return (s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",""":"&quot;","'":"&#039;"}[c]));
+    }
+
+    // Sorting
+    document.querySelectorAll('th[data-sort]').forEach(th=>{
+      th.style.cursor='pointer';
+      th.addEventListener('click', ()=>{
+        const field = th.getAttribute('data-sort');
+        if(sortField===field){ sortDir = (sortDir==='asc'?'desc':'asc'); }
+        else{ sortField = field; sortDir = 'asc'; }
+        render();
+      });
+    });
+
+    // Search & filter
+    document.getElementById('search').addEventListener('input', render);
+    document.getElementById('statusFilter').addEventListener('change', render);
+
+    // CSV Export/Import
+    document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
+      const headers = Object.keys(sampleItem());
+      const rows = [headers.join(',')].concat(items.map(it=> headers.map(h=>csvEscape(it[h])).join(',')));
+      const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='inventory.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+    function csvEscape(v){
+      if(v===undefined||v===null) return '';
+      const s = String(v);
+      if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }
+    document.getElementById('importCsvBtn').addEventListener('click', ()=> document.getElementById('csvInput').click());
+    document.getElementById('csvInput').addEventListener('change', async (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      const headers = lines.shift().split(',').map(h=>h.trim());
+      const parsed = lines.map(line=>{
+        const cells = parseCsvLine(line);
+        const obj = {}; headers.forEach((h,i)=> obj[h] = cells[i]);
+        ['cost','listPrice','salePrice','shipCharged','shipCost','feePercent','feeFixed','weightOz'].forEach(k=> obj[k] = Number(obj[k]||0));
+        return obj;
+      });
+      parsed.forEach(p=>{
+        if(!p.id) p.id = crypto.randomUUID();
+        const idx = items.findIndex(x=>x.id===p.id);
+        if(idx>=0) items[idx]=p; else items.push(p);
+      });
+      save(); render();
+      e.target.value='';
+    });
+    function parseCsvLine(line){
+      const out=[]; let cur=''; let inQ=false;
+      for(let i=0;i<line.length;i++){
+        const ch=line[i];
+        if(inQ){
+          if(ch==='"' && line[i+1]==='"'){ cur+='"'; i++; }
+          else if(ch==='"'){ inQ=false; }
+          else cur+=ch;
+        } else {
+          if(ch===','){ out.push(cur); cur=''; }
+          else if(ch==='"'){ inQ=true; }
+          else cur+=ch;
+        }
+      }
+      out.push(cur); return out;
+    }
+
+    // Wipe
+    document.getElementById('wipeBtn').addEventListener('click', ()=>{
+      if(confirm('This deletes ALL items. Continue?')){
+        items=[]; save(); render(); resetForm();
+      }
+    });
+
+    // Init
+    resetForm();
+    render();
+
+    // Keyboard niceties
+    document.addEventListener('keydown', (e)=>{
+      if(e.ctrlKey && e.key==='Enter'){ document.getElementById('saveBtn').click(); }
+      if(e.key==='/' && document.activeElement.tagName!=='INPUT'){ e.preventDefault(); document.getElementById('search').focus(); }
+    });
+
+    function sampleItem(){
+      return { id:'', title:'', category:'', sku:'', upc:'', locationBin:'', source:'', ebayUrl:'', cost:0, listPrice:0, salePrice:0, shipCharged:0, shipCost:0, feePercent:13.25, feeFixed:0.30, status:'Active', weightOz:0, dateIn:'', dateOut:'', notes:'' };
+    }
+  </script>
+
+  <script>
+    // ===== PWA install prompt + SW registration + update toast =====
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('installBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (installBtn) installBtn.style.display = 'inline-flex';
+    });
+
+    installBtn?.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      installBtn.disabled = true;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installBtn?.style && (installBtn.style.display = 'none');
+      console.log('PWA installed');
+    });
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => {
+            console.log('SW registered', reg.scope);
+            if (reg.waiting) notifyUpdate(reg.waiting);
+            reg.addEventListener('updatefound', () => {
+              const newSW = reg.installing;
+              if (!newSW) return;
+              newSW.addEventListener('statechange', () => {
+                if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                  notifyUpdate(newSW);
+                }
+              });
+            });
+          })
+          .catch(err => console.error('SW registration failed', err));
+      });
+    }
+
+    function notifyUpdate(sw) {
+      const bar = document.createElement('div');
+      bar.textContent = 'Update available — click to refresh';
+      bar.style.position = 'fixed';
+      bar.style.bottom = '16px';
+      bar.style.right = '16px';
+      bar.style.padding = '10px 12px';
+      bar.style.background = '#22c55e';
+      bar.style.color = '#04160a';
+      bar.style.borderRadius = '10px';
+      bar.style.cursor = 'pointer';
+      bar.style.boxShadow = '0 8px 30px rgba(0,0,0,.35)';
+      bar.addEventListener('click', () => { sw && sw.postMessage && sw.postMessage({ type: 'SKIP_WAITING' }); });
+      document.body.appendChild(bar);
+      navigator.serviceWorker.addEventListener('controllerchange', () => { window.location.reload(); });
+    }
+  </script>
+
+  <script>
+    // ===== Barcode Scanning (native BarcodeDetector) =====
+    (function(){
+      const scanBtn = document.getElementById('scanBtn');
+      const scanOverlay = document.getElementById('scanOverlay');
+      const scanVideo = document.getElementById('scanVideo');
+      const scanCloseBtn = document.getElementById('scanCloseBtn');
+      let scanStream = null; let scanTimer = null; let detector = null;
+
+      async function openScanner(){
+        if(!('BarcodeDetector' in window)){
+          alert('Barcode scanning not supported here. Enter UPC manually.');
+          return;
+        }
+        try{
+          detector = new BarcodeDetector({ formats:['ean_13','upc_e','upc_a','ean_8','code_128'] });
+          scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } });
+          scanVideo.srcObject = scanStream; scanOverlay.style.display='flex';
+          const tick = async ()=>{
+            try{
+              const bitmap = await createImageBitmap(scanVideo);
+              const codes = await detector.detect(bitmap);
+              bitmap.close();
+              if(codes && codes[0]){
+                const raw = codes[0].rawValue || '';
+                const upcEl = document.getElementById('upc'); if(upcEl) upcEl.value = raw;
+                closeScanner();
+                return;
+              }
+            }catch{}
+            scanTimer = setTimeout(tick, 300);
+          };
+          tick();
+        }catch(err){
+          alert('Camera access failed. Enter UPC manually.');
+        }
+      }
+      function closeScanner(){
+        if(scanTimer){ clearTimeout(scanTimer); scanTimer=null; }
+        if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+        scanOverlay.style.display='none';
+      }
+      scanBtn?.addEventListener('click', openScanner);
+      scanCloseBtn?.addEventListener('click', closeScanner);
+    })();
+  </script>
+
+  <script>
+    // ===== Supabase Sync (optional) =====
+    async function supaFetch(path, opts={}){
+      const urlBase = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : '';
+      const key = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : '';
+      if(!urlBase || !key) throw new Error('Supabase not configured');
+      const res = await fetch(`${urlBase}/rest/v1/${path}`, {
+        ...opts,
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          ...(opts.headers||{})
+        }
+      });
+      if(!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function syncPull(){
+      if(!supaEnabled()){ alert('Add SUPABASE_URL and SUPABASE_KEY in the code first.'); return; }
+      const rows = await supaFetch(`${SUPABASE_TABLE}?select=*`);
+      items = rows.sort((a,b)=> (a.dateIn||'').localeCompare(b.dateIn||'')).reverse();
+      save(); render();
+      alert(`Pulled ${rows.length} items from cloud.`);
+    }
+
+    async function syncPush(){
+      if(!supaEnabled()){ alert('Add SUPABASE_URL and SUPABASE_KEY in the code first.'); return; }
+      await supaFetch(`${SUPABASE_TABLE}`, {
+        method: 'POST',
+        body: JSON.stringify(items),
+        headers: { Prefer: 'resolution=merge-duplicates' }
+      });
+      alert(`Pushed ${items.length} items to cloud.`);
+    }
+
+    document.getElementById('syncPullBtn')?.addEventListener('click', ()=>{ syncPull().catch(e=>alert(e.message)); });
+    document.getElementById('syncPushBtn')?.addEventListener('click', ()=>{ syncPush().catch(e=>alert(e.message)); });
+  </script>
+
+  <script>
+    // ===== Icon generator (creates 192/512 PNGs to download) =====
+    document.getElementById('genIconsBtn')?.addEventListener('click', ()=>{
+      genPng(192); genPng(512);
+      alert('Icons generated. Check your downloads for icon-192.png and icon-512.png');
+    });
+    function genPng(size){
+      const c = document.createElement('canvas'); c.width=c.height=size; const x=c.getContext('2d');
+      x.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--silver').trim()||'#B0B7BC';
+      x.fillRect(0,0,size,size);
+      x.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#0076B6';
+      x.beginPath(); x.arc(size*0.45, size*0.45, size*0.28, 0, Math.PI*2); x.fill();
+      x.fillStyle = '#ffffff'; x.fillRect(size*0.35, size*0.25, size*0.12, size*0.5);
+      c.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`icon-${size}.png`; a.click(); }, 'image/png');
+    }
+  </script>
+</body>
+</html>
