@@ -1,46 +1,40 @@
-const CACHE_NAME = 'nick-ebay-cache-v2';
+const CACHE_NAME = 'ebay-pwa-v1-cache';
 const APP_SHELL = [
-  './',
-  './index.html',
-  './manifest.webmanifest'
-  // Add './icons/icon-192.png', './icons/icon-512.png' once you generate them
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/offline.html',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(APP_SHELL);
+    self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    ))
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => (k !== CACHE_NAME ? caches.delete(k) : null)));
+    self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(c => c.put('./', copy));
-        return res;
-      }).catch(() => caches.match('./'))
-    );
-  } else {
-    event.respondWith(
-      caches.match(req).then(cached => cached || fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(c => c.put(req, copy));
-        return res;
-      }))
-    );
-  }
+  const { request } = event;
+  event.respondWith((async () => {
+    try {
+      const network = await fetch(request);
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, network.clone()).catch(() => {}); // ignore opaque or POST
+      return network;
+    } catch (err) {
+      const cached = await caches.match(request);
+      return cached || caches.match('/offline.html');
+    }
+  })());
 });
