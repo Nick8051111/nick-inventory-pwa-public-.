@@ -1,11 +1,11 @@
-const CACHE_NAME = 'ebay-pwa-v1-cache';
+const CACHE_NAME = 'ebay-pwa-v1-1-cache';
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/offline.html',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  'index.html',
+  'listings.html',
+  'manifest.json',
+  'offline.html',
+  'icons/icon-192.png',
+  'icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -30,11 +30,13 @@ self.addEventListener('fetch', (event) => {
     try {
       const network = await fetch(request);
       const cache = await caches.open(CACHE_NAME);
-      cache.put(request, network.clone()).catch(() => {}); // ignore opaque or POST
+      if (request.method === 'GET') {
+        cache.put(request, network.clone()).catch(() => {});
+      }
       return network;
     } catch (err) {
       const cached = await caches.match(request);
-      return cached || caches.match('/offline.html');
+      return cached || caches.match('offline.html');
     }
   })());
 });

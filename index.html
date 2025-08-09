@@ -116,8 +116,8 @@
     <img src="icons/icon-192.png" alt="App icon" width="28" height="28" />
     <h1>eBay PWA</h1>
     <nav>
-      <a href="#">Home</a>
-      <a href="#">Browse</a>
+      <a href="index.html">Home</a>
+      <a href="listings.html">Listings</a>
       <a href="#">Cart</a>
       <a href="#">Profile</a>
     </nav>
@@ -125,8 +125,8 @@
 
   <main>
     <section class="hero">
-      <h2>Welcome to the eBay‑style PWA</h2>
-      <p>This lightweight PWA uses an eBay‑inspired color palette and layout. It’s installable, works offline (basic cache), and is ready for your listings.</p>
+      <h2>Welcome to the eBay-style PWA</h2>
+      <p>This lightweight PWA uses an eBay-inspired color palette and layout. It’s installable, works offline (basic cache), and is ready for your listings.</p>
       <div class="grid">
         <div class="card">
           <h3>Fast</h3>
@@ -137,7 +137,7 @@
           <p>Add to Home Screen on mobile or install on desktop.</p>
         </div>
         <div class="card">
-          <h3>Offline‑first</h3>
+          <h3>Offline-first</h3>
           <p>Serves cached shell and an offline page if needed.</p>
         </div>
         <div class="card">
@@ -146,20 +146,19 @@
         </div>
       </div>
       <p style="margin-top:14px;">
-        <button class="btn" onclick="alert('Hook this up to your listings page or search!')">Get Started</button>
+        <button class="btn" onclick="window.location.href='listings.html'">Get Started</button>
       </p>
     </section>
   </main>
 
   <footer>
-    <span class="version">Version 1.0.0</span>
+    <span class="version">Version 1.0.1</span>
   </footer>
 
   <script>
-    // Register the service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
           console.warn('SW registration failed:', err);
         });
       });

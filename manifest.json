@@ -1,7 +1,7 @@
 {
   "name": "eBay PWA",
   "short_name": "eBayPWA",
-  "start_url": "/index.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#f5f5f5",
   "theme_color": "#0064d2",

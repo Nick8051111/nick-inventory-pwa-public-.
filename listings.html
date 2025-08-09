@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Listings • eBay PWA</title>
+  <meta name="theme-color" content="#0064d2" />
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    :root { --ebay-blue:#0064d2; --ebay-yellow:#f7d100; --text:#111; --bg:#f5f5f5; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; margin:0; background:var(--bg); color:var(--text); }
+    header { background:var(--ebay-yellow); padding:12px 20px; display:flex; align-items:center; gap:12px; border-bottom:1px solid rgba(0,0,0,.08); }
+    header h1 { margin:0; color:var(--ebay-blue); font-size:1.3rem; }
+    nav { margin-left:auto; display:flex; gap:10px; }
+    nav a { text-decoration:none; color:var(--ebay-blue); font-weight:600; font-size:.95rem; padding:6px 10px; border-radius:8px; }
+    nav a:hover { background:rgba(0,0,0,.06); }
+    main { max-width:1100px; margin:0 auto; padding:18px; min-height:70vh; }
+    .controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    input[type="search"] { flex:1; min-width:220px; padding:10px; border-radius:10px; border:1px solid rgba(0,0,0,.15); }
+    select { padding:10px; border-radius:10px; border:1px solid rgba(0,0,0,.15); }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+    .card { background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:12px; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,.05); display:flex; flex-direction:column; gap:8px; }
+    .card img { width:100%; height:140px; object-fit:cover; border-radius:8px; background:#fafafa; }
+    .price { color:var(--ebay-blue); font-weight:800; }
+    footer { background:var(--ebay-blue); color:#fff; text-align:center; padding:10px 0; font-size:.85rem; border-top:1px solid rgba(255,255,255,.2); }
+    .version { opacity:.9; font-weight:700; letter-spacing:.3px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon-192.png" alt="App icon" width="28" height="28" />
+    <h1>Listings</h1>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="listings.html">Listings</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Search items..." oninput="render()" />
+      <select id="sort" onchange="render()">
+        <option value="relevance">Sort: Relevance</option>
+        <option value="price-asc">Price: Low → High</option>
+        <option value="price-desc">Price: High → Low</option>
+      </select>
+    </div>
+    <div id="grid" class="grid"></div>
+  </main>
+
+  <footer><span class="version">Version 1.0.1</span></footer>
+
+  <script>
+    const items = [
+      { id:1, title:'Buck 110 Folding Hunter', price:55.00, img:'https://picsum.photos/seed/buck110/600/400' },
+      { id:2, title:'Swiss Tech 6-in-1 Utili-Key', price:8.50, img:'https://picsum.photos/seed/utilikey/600/400' },
+      { id:3, title:'Bandai/Toho Gigan 7.5" Vinyl Figure', price:14.99, img:'https://picsum.photos/seed/gigan/600/400' },
+      { id:4, title:'Hot Wheels Mario Series (Set of 4)', price:19.50, img:'https://picsum.photos/seed/mario/600/400' },
+      { id:5, title:'True Utility Micro Pocket Tool', price:8.50, img:'https://picsum.photos/seed/trueutility/600/400' }
+    ];
+
+    function render(){
+      const q = document.getElementById('q').value.trim().toLowerCase();
+      const sort = document.getElementById('sort').value;
+      let filtered = items.filter(it => it.title.toLowerCase().includes(q));
+
+      if (sort === 'price-asc') filtered.sort((a,b)=>a.price-b.price);
+      if (sort === 'price-desc') filtered.sort((a,b)=>b.price-a.price);
+
+      const grid = document.getElementById('grid');
+      grid.innerHTML = filtered.map(it => `
+        <div class="card">
+          <img src="${it.img}" alt="${it.title}">
+          <div><strong>${it.title}</strong></div>
+          <div class="price">$${it.price.toFixed(2)}</div>
+          <button onclick="alert('Stub: open detail for ${it.title}')">View</button>
+        </div>
+      `).join('') || '<p>No items match your search.</p>';
+    }
+
+    render();
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
